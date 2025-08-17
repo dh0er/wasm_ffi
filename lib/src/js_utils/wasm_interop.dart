@@ -205,14 +205,16 @@ class Instance {
         // TODO throw StateError('Could not find an export named $key');
         continue;
       }
-      if (value is Function) {
-        functions[key] = (value as JSFunction);
-      } else if (WasmGlobal.isInstance(value)) {
+      // Classify by WebAssembly types first to avoid misclassifying non-functions
+      if (WasmGlobal.isInstance(value)) {
         globals[key] = (value as WasmGlobal);
       } else if (WasmMemory.isInstance(value)) {
         memories[key] = (value as WasmMemory);
       } else if (WasmTable.isInstance(value)) {
         tables[key] = (value as WasmTable);
+      } else if (value is JSFunction || value is Function) {
+        // In dart2wasm, exported functions are JSFunction; DDC may present them as Function
+        functions[key] = value as JSFunction;
       }
     }
   }

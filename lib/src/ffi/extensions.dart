@@ -1,9 +1,12 @@
+import 'dart:js_interop';
 import 'dart:typed_data';
 import 'annotations.dart';
 import 'exceptions.dart';
 import 'marshaller.dart';
 import 'memory.dart';
 import 'modules/module.dart';
+import 'type_utils.dart';
+import 'typed_wrappers.dart';
 import 'types.dart';
 
 /// Extension on [Pointer] specialized for the type argument [NativeFunction].
@@ -20,12 +23,30 @@ extension NativeFunctionPointer<NF extends Function>
   DF asFunction<DF extends Function>() {
     // ignore: prefer_final_locals
     WasmSymbol symbol = symbolByAddress(boundMemory, address);
-    if (symbol is FunctionDescription && symbol.function is Function) {
-      return marshall<NF, DF>(symbol.function as Function, boundMemory);
-    } else {
-      throw ArgumentError(
-          'No function at address $address was found (but a global symbol)!');
+    if (symbol is FunctionDescription) {
+      final Object rawFunc = symbol.function;
+
+      // For JSFunction (dart2wasm): try typed wrappers
+      if (rawFunc is JSFunction) {
+        final JSFunction jsFunc = rawFunc;
+        final DF? typed = buildTypedWrapper<DF>(jsFunc, boundMemory);
+        if (typed != null) {
+          return typed;
+        }
+
+        // No typed wrapper available for this signature
+        throw UnsupportedError(
+            'No typed wrapper implemented for ${typeString<DF>()}');
+      }
+
+      // For Dart Functions (DDC or bridged), use marshalling
+      if (rawFunc is Function) {
+        return marshall<NF, DF>(rawFunc, boundMemory);
+      }
     }
+
+    throw ArgumentError(
+        'No function at address $address was found (but a global symbol)!');
   }
 }
 

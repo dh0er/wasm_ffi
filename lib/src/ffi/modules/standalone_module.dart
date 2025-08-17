@@ -3,8 +3,10 @@ import 'dart:typed_data';
 
 import '../../js_utils/wasm_interop.dart';
 import '../annotations.dart';
+import '../extensions.dart';
 import '../memory.dart';
 import '../type_utils.dart';
+import '../typed_wrappers.dart';
 import '../types.dart';
 import 'module.dart';
 
@@ -48,8 +50,8 @@ class StandaloneWasmModule extends Module {
   @override
   void free(int pointer) {
     final func = _instance.functions['free'];
-    if (func is Function) {
-      (func! as Function).call(pointer);
+    if (func != null) {
+      func.callAsFunction(null, pointer.toJS);
     }
   }
 
@@ -63,9 +65,9 @@ class StandaloneWasmModule extends Module {
   @override
   int malloc(int size) {
     final func = _instance.functions['malloc'];
-    if (func is Function) {
-      final resp = (func! as Function).call(size) as int;
-      return resp;
+    if (func != null) {
+      final result = (func.callAsFunction(null, size.toJS)! as JSNumber);
+      return result.toDartInt;
     }
     return -1;
   }
@@ -100,6 +102,14 @@ class StandaloneWasmModule extends Module {
   @override
   F lookupFunction<T extends Function, F extends Function>(
       String name, Memory memory) {
-    return _instance.functions[name]! as F;
+    final jsFunc = _instance.functions[name];
+    if (jsFunc != null) {
+      // Try typed wrappers for JSFunction first
+      final F? typed = buildTypedWrapper<F>(jsFunc, memory);
+      if (typed != null) return typed;
+    }
+
+    // Otherwise use the pointer-based path (which will use extensions.asFunction)
+    return lookup<NativeFunction<T>>(name, memory).asFunction<F>();
   }
 }
