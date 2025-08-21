@@ -53,11 +53,17 @@ Future<void> generateWasmFfiWrappers({String? outFile}) async {
     }
   }
 
-  if (signatures.isEmpty) return;
-
   final outPath = outFile ?? '$repoRoot/lib/wasm_ffi_signatures.g.dart';
-  final code = _generateRegisterFile(signatures);
-  await File(outPath).writeAsString(code);
+  final outDir = File(outPath).parent.path;
+  final stubPath = '$outDir/wasm_ffi_signatures_stub.g.dart';
+
+  if (signatures.isNotEmpty) {
+    final code = _generateRegisterFile(signatures);
+    await File(outPath).writeAsString(code);
+  }
+
+  // Always ensure a non-web stub exists for conditional imports
+  await File(stubPath).writeAsString(_generateStubFile());
 }
 
 String? _findNextAsFunctionFrom(String content, int startIndex) {
@@ -142,6 +148,15 @@ String _generateRegisterFile(Set<String> signatures) {
     b.writeln('  });');
   }
   b.writeln('}');
+  return b.toString();
+}
+
+String _generateStubFile() {
+  final b = StringBuffer();
+  b.writeln('// GENERATED STUB FILE - SAFE FOR NON-WEB BUILDS.');
+  b.writeln();
+  b.writeln('/// No-op on non-web platforms.');
+  b.writeln('void registerSignatures() {}');
   return b.toString();
 }
 
